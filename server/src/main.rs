@@ -21,6 +21,8 @@ fn main(){
             std::process::exit(1)
         }
     };
+    server.set_nonblocking(true).expect("Failed to initiate non-blocking!");
+
     let mut clients = vec![];
 
     // create channel for communication between threads
@@ -74,8 +76,8 @@ fn main(){
             // private message functionality
             if msg.starts_with("send "){
                 // if the message starts with a number < the amount of clients, send it to that specific client
-                for i in 0..clients.len()-1{
-                    if msg.chars().nth(7).unwrap() == i as u8 as char{
+                for i in 0..clients.len(){
+                    if msg.chars().nth(5).unwrap().to_digit(10).unwrap() == i as u32{
                         let mut msg_buff = msg.clone().into_bytes();
                         // add zero character to mark end of message
                         msg_buff.resize(MSG_SIZE, 0);
@@ -83,9 +85,9 @@ fn main(){
                     }
                 }
             }
-            // user query to 
+            // user query to see amount of connected clients
             else if msg.starts_with("connections "){
-                let mut client_return = msg.chars().nth(13).unwrap() as usize;
+                let mut client_return = msg.chars().nth(12).unwrap().to_digit(10).unwrap() as usize;
                 let mut msg_buff = format!("{} connected clients.", clients.len()).into_bytes();
                 // add zero character to mark end of message
                 msg_buff.resize(MSG_SIZE, 0);
@@ -95,6 +97,7 @@ fn main(){
             // broadcast functionality
             // send message to all clients
             else {
+                println!("else");
                 clients = clients.into_iter().filter_map(|mut client| {
                 let mut msg_buff = msg.clone().into_bytes();
                 // add zero character to mark end of message

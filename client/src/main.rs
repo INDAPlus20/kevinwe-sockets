@@ -33,6 +33,7 @@ fn main() {
             std::process::exit(1)
         }
     };
+    client.set_nonblocking(true).expect("Failed to initiate non-blocking!");
 
     // create channel for communication between threads
     let (sender, receiver) = mpsc::channel::<String>();
