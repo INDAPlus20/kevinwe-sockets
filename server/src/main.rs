@@ -32,13 +32,14 @@ fn main(){
         /* Start listening thread on new connecting client. */
         if let Ok((mut socket, addr)) = server.accept() {
 
-            println!("Client {} connected.", addr);
+            println!("Client {} connected. Client no. {}", addr, clients.len());
 
             let _sender = sender.clone();
 
             clients.push(
                 socket.try_clone().expect("Failed to clone client! Client wont receive messages!"));
 
+            socket.write(&[(clients.len()-1) as u8]);
             thread::spawn(move || loop {
 
                 let mut msg_buff = vec![0; MSG_SIZE];
@@ -49,12 +50,11 @@ fn main(){
                     Ok(_) => {
                         let _msg = msg_buff
                             .into_iter()
-                            .take_while(|&x| x != 0)
+                            .take_while(|&x| x != 255)
                             .collect::<Vec<_>>();
                         let msg = String::from_utf8(_msg).expect("Invalid UTF-8 message!");
 
                         println!("{}: {:?}", addr, msg);
-
                         _sender.send(msg).expect("Failed to relay message!");
                     }, 
                     // no message in stream
@@ -71,26 +71,34 @@ fn main(){
         }
         /* Broadcast incoming messages. */
         
-        if let Ok(msg) = receiver.try_recv() {
-            
+        if let Ok(mut msg) = receiver.try_recv() {
+            println!("{}", msg);
+            let client_return = msg.chars().nth(0).unwrap().to_digit(10).unwrap() as usize;
+            msg.remove(0);
             // private message functionality
             if msg.starts_with("send "){
                 // if the message starts with a number < the amount of clients, send it to that specific client
-                for i in 0..clients.len(){
-                    if msg.chars().nth(5).unwrap().to_digit(10).unwrap() == i as u32{
-                        let mut msg_buff = msg.clone().into_bytes();
-                        // add zero character to mark end of message
-                        msg_buff.resize(MSG_SIZE, 0);
-                        clients[i].write_all(&msg_buff); //result must be used?
-                    }
+                let mut client_target = msg.chars().nth(5).unwrap().to_digit(10).unwrap_or(25565) as usize;
+                if client_target > clients.len()-1{
+                    client_target = 25565;
                 }
+                let mut msg_buff = msg.clone().into_bytes();
+                if client_target == 25565{
+                    msg_buff = format!("Error! That is not a connected client!").into_bytes();
+                    msg_buff.resize(MSG_SIZE, 255);
+                    clients[client_return].write_all(&msg_buff);
+                }   else{
+                    // add zero character to mark end of message
+                    msg_buff.resize(MSG_SIZE, 255);
+                    clients[client_target].write_all(&msg_buff); //result must be used?
+                }
+                
             }
             // user query to see amount of connected clients
-            else if msg.starts_with("connections "){
-                let mut client_return = msg.chars().nth(12).unwrap().to_digit(10).unwrap() as usize;
+            else if msg.starts_with("connections"){
                 let mut msg_buff = format!("{} connected clients.", clients.len()).into_bytes();
                 // add zero character to mark end of message
-                msg_buff.resize(MSG_SIZE, 0);
+                msg_buff.resize(MSG_SIZE, 255);
                 clients[client_return].write_all(&msg_buff); //result must be used?
             }
             
@@ -101,7 +109,7 @@ fn main(){
                 clients = clients.into_iter().filter_map(|mut client| {
                 let mut msg_buff = msg.clone().into_bytes();
                 // add zero character to mark end of message
-                msg_buff.resize(MSG_SIZE, 0);
+                msg_buff.resize(MSG_SIZE, 255);
                 client.write_all(&msg_buff).map(|_| client).ok()
             }).collect::<Vec<_>>();
             }

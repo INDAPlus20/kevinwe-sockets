@@ -23,9 +23,17 @@ const MSG_SIZE: usize = 32;
 
 fn main() {
     // connect to server
+    let client_no;
     let mut client = match TcpStream::connect(SERVER_ADDR) {
-        Ok(_client) => {
+        Ok(mut _client) => {
             println!("Connected to server at: {}", SERVER_ADDR);
+            let mut buf = [0;10];
+            while _client.peek(&mut buf).unwrap_or(0) == 0{
+                continue;
+            }
+            _client.read(&mut buf).unwrap();
+            client_no = buf[0] + 48; //client number as utf8
+            println!("You are client no {}", client_no - 48);
             _client
         },
         Err(_) => {
@@ -49,7 +57,7 @@ fn main() {
                 // read until end-of-message (zero character)
                 let _msg = msg_buffer
                     .into_iter()
-                    .take_while(|&x| x != 0)
+                    .take_while(|&x| x != 255)
                     .collect::<Vec<_>>();
                 let msg = String::from_utf8(_msg).expect("Invalid UTF-8 message!");
 
@@ -69,8 +77,9 @@ fn main() {
             // received message from channel
             Ok(msg) => {
                 let mut msg_buffer = msg.clone().into_bytes();
+                msg_buffer.insert(0, client_no as u8);
                 // add zero character to mark end of message
-                msg_buffer.resize(MSG_SIZE, 0);
+                msg_buffer.resize(MSG_SIZE, 255);
 
                 if client.write_all(&msg_buffer).is_err() {
                     println!("Failed to send message!")
